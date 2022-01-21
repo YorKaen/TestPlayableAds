@@ -2,7 +2,6 @@
 import * as PIXI from 'pixi.js';
 import {gsap} from "gsap";
 import Assets from "./assetsList";
-//import {scaleToWindow} from "./scaleWindow";
 
 ///Переменные
 const maxWidth = 1390;
@@ -19,14 +18,15 @@ let isFinalShown = false;
 let finalScreen = []
 
 const app = new PIXI.Application({
-    width: Math.max(document.documentElement.clientWidth, window.innerWidth || 0),
-    height: Math.max(document.documentElement.clientHeight, window.innerHeight || 0),
-    backgroundColor: 'green',
-    //resizeTo: document.querySelector('#app'),
-    resizeTo: window,
+    width: maxWidth,
+    height: maxHeight,
+    backgroundColor: 'black',
+    resizeTo: document.querySelector('#app'),
+    //resizeTo: window,
     view: canvasAppContainer,
     resolution: window.devicePixelRatio || 1,
     autoDensity: true,
+    autoResize:true
 });
 
 //Контейнеры (стоит ли делать рефакторинг)
@@ -52,12 +52,88 @@ app.stage.addChild(containerDecClose);
 app.stage.addChild(containerChooseStairs);
 app.stage.addChild(containerUI);
 
-///Вызов важных функций и наблюдателей
-//window.addEventListener("resize", function (event) {
-//    scaleToWindow(app.renderer.view)
-//});
-//var scale = scaleToWindow(app.renderer.view);
+///Вызов скалирования (взято с гайда по PIXI)
+window.addEventListener("resize", function(event){
+    scaleToWindow(app.renderer.view, "black");
+});
 
+function scaleToWindow(canvas, backgroundColor) {
+    var scaleX, scaleY, scale, center;
+
+    //1. Scale the canvas to the correct size
+    //Figure out the scale amount on each axis
+    scaleX = window.innerWidth / canvas.offsetWidth;
+    scaleY = window.innerHeight / canvas.offsetHeight;
+
+    //Scale the canvas based on whichever value is less: `scaleX` or `scaleY`
+    scale = Math.min(scaleX, scaleY);
+    canvas.style.transformOrigin = "0 0";
+    canvas.style.transform = "scale(" + scale + ")";
+
+    //2. Center the canvas.
+    //Decide whether to center the canvas vertically or horizontally.
+    //Wide canvases should be centered vertically, and
+    //square or tall canvases should be centered horizontally
+    if (canvas.offsetWidth > canvas.offsetHeight) {
+        if (canvas.offsetWidth * scale < window.innerWidth) {
+            center = "horizontally";
+        } else {
+            center = "vertically";
+        }
+    } else {
+        if (canvas.offsetHeight * scale < window.innerHeight) {
+            center = "vertically";
+        } else {
+            center = "horizontally";
+        }
+    }
+
+    //Center horizontally (for square or tall canvases)
+    var margin;
+    if (center === "horizontally") {
+        margin = (window.innerWidth - canvas.offsetWidth * scale) / 2;
+        canvas.style.marginTop = 0 + "px";
+        canvas.style.marginBottom = 0 + "px";
+        canvas.style.marginLeft = margin + "px";
+        canvas.style.marginRight = margin + "px";
+    }
+
+    //Center vertically (for wide canvases)
+    if (center === "vertically") {
+        margin = (window.innerHeight - canvas.offsetHeight * scale) / 2;
+        canvas.style.marginTop = margin + "px";
+        canvas.style.marginBottom = margin + "px";
+        canvas.style.marginLeft = 0 + "px";
+        canvas.style.marginRight = 0 + "px";
+    }
+
+    //3. Remove any padding from the canvas  and body and set the canvas
+    //display style to "block"
+    canvas.style.paddingLeft = 0 + "px";
+    canvas.style.paddingRight = 0 + "px";
+    canvas.style.paddingTop = 0 + "px";
+    canvas.style.paddingBottom = 0 + "px";
+    canvas.style.display = "block";
+
+    //4. Set the color of the HTML body background
+    document.body.style.backgroundColor = backgroundColor;
+
+    //Fix some quirkiness in scaling for Safari
+    var ua = navigator.userAgent.toLowerCase();
+    if (ua.indexOf("safari") !== -1) {
+        if (ua.indexOf("chrome") > -1) {
+            // Chrome
+        } else {
+            // Safari
+            canvas.style.maxHeight = "100%";
+            canvas.style.minHeight = "100%";
+        }
+    }
+
+    //5. Return the `scale` value. This is important, because you'll nee this value
+    //for correct hit testing between the pointer and sprites
+    return scale;
+}
 //////loader
 loader.baseUrl = "assets";
 loader.onProgress.add(loadProgressHandler);
@@ -66,6 +142,7 @@ loader.load(init);
 loader.onComplete.add(() => {
     hideLoadingText()
 })
+
 
 getLoadingText()
 
@@ -79,7 +156,7 @@ app.stage.mask = px_mask_outter_bounds;
 
 ////Установка объектов
 function init(loader, resources) {
-    //scaleToWindow(app.renderer.view);
+    scaleToWindow(app.renderer.view);
     //onWindowResize()
     ///Обычная загрузка
     const bg = new PIXI.Sprite(loader.resources["back"].texture);
@@ -264,7 +341,7 @@ PlaceObject.prototype.interactable = function () {
             }
             ladders[setLadder].sprite.texture = textureButtonOver;
             getStair(j)
-            moveOkBtn(setLadder);
+            createOkBtn(setLadder);
         }
     }
 
@@ -287,31 +364,39 @@ PlaceObject.prototype.interactable = function () {
                     allowStairSwitch = true
                 }
             });
+
         }
     }
 
     function moveOkBtn(j) {
-        buttonOk.sprite.visible = true
         let changeY = 90;
         let moveX = ladders[j].posX;
         let moveY = ladders[j].posY + changeY;
         buttonOk.sprite.x = moveX
         buttonOk.sprite.y = moveY
-        if (!isFinalShown) {
-            buttonOk.sprite.on('pointerdown', showFinalScreen);
+
+    }
+    function createOkBtn(j) {
+        if(!buttonOk.sprite.visible){
+            buttonOk.sprite.visible = true;
+            buttonOk.sprite.on('pointerup', showFinalScreen);
+            moveOkBtn(j)
         }
+        else {
+            moveOkBtn(j)
+        }
+
     }
 
     function showFinalScreen() {
-
         isFinalShown = true;
-        disableAll();
         for (let i = 0; i < finalScreen.length; i++) {
             finalScreen[i].sprite.visible = true
             gsap.from(finalScreen[i].sprite, {
                 alpha: 0.0, duration: 0.5,
             });
         }
+        disableAll();
     }
 
     function onClickHammer() {
